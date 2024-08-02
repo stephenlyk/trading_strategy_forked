@@ -1,3 +1,4 @@
+import gc
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -12,6 +13,7 @@ from strategy.percentile import Percentile
 from strategy.min_max import MinMax
 from strategy.robust import Robust
 from joblib import Parallel, delayed
+from memory_profiler import profile
 
 class Optimization():
 
@@ -36,9 +38,9 @@ class Optimization():
         return result
 
     def run(self):
-        results = Parallel(n_jobs=-1)(delayed(self._run_strategy)(window_size, threshold) for window_size in self.window_size_list for threshold in self.threshold_list)
-
         results_data = []
+        results = Parallel(n_jobs=4)(delayed(self._run_strategy)(window_size, threshold) for window_size in self.window_size_list for threshold in self.threshold_list)
+
         for result in results:
             result_data = result.dump_data()
             result_data['Strategy Object'] = result

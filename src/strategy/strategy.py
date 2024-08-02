@@ -4,7 +4,10 @@ import plotly.express as px
 
 class Strategy:
 
+    bps = 10
+
     def __init__(self, source_df, window_size, threshold, target='Price', price='Price', long_short="long", condition="higher"):
+        self.commission = 0.0001 * Strategy.bps
         self.source_df = source_df
         self.source_df[target] = pd.to_numeric(self.source_df[target], errors='coerce')
         self.source_df['Changes'] = self.source_df['Price'].pct_change(fill_method=None)
@@ -44,10 +47,9 @@ class Strategy:
     @staticmethod
     def return_mdds(df):
         roll_max = df.cummax()
-        epsilon = 1e-9
-        roll_max.replace(0, epsilon, inplace=True)
-        drawdown = df/roll_max - 1.0
+        drawdown = df - roll_max
         mdds = drawdown.cummin()
+        mdds.replace(0, np.inf, inplace=True)
         return mdds
 
     @staticmethod
@@ -74,52 +76,52 @@ class Strategy:
                     case "long":
                         if condition == "higher":
                             # buy when price is higher than moving average
-                            df['Position'] = (df[signal] > threshold).astype(int)
+                            df['Position'] = (df[signal].astype(float) > threshold).astype(int)
                         if condition == "lower":
                             # buy  when price is lower than moving average
-                            df['Position'] = (df[signal] < threshold).astype(int)
+                            df['Position'] = (df[signal].astype(float) < threshold).astype(int)
 
                     case "short":
                         if condition == "higher":
                             # short when price is higher than moving average
-                            df['Position'] = (df[signal] > threshold).astype(int) * - 1
+                            df['Position'] = (df[signal].astype(float) > threshold).astype(int) * - 1
                         if condition == "lower":
                             # short when price is lower than moving average
-                            df['Position'] = (df[signal] < threshold).astype(int) * -1
+                            df['Position'] = (df[signal].astype(float) < threshold).astype(int) * -1
 
                     case "both":
                         if condition == "higher":
-                            df['Position'] = (df[signal]  > threshold).astype(int) + \
-                                            (df[signal] < (threshold * - 1)).astype(int) * -1
+                            df['Position'] = (df[signal].astype(float)  > threshold).astype(int) + \
+                                            (df[signal].astype(float) < (threshold * - 1)).astype(int) * -1
                         if condition == "lower":
-                            df['Position'] = (df[signal] < (threshold * -1)).astype(int) + \
-                                            (df[signal]  > threshold).astype(int) * -1
+                            df['Position'] = (df[signal].astype(float) < (threshold * -1)).astype(int) + \
+                                            (df[signal].astype(float)  > threshold).astype(int) * -1
 
             # signal is between 0 and 1
             case "bounded":
                 match long_short:
                     case "long":
                         if condition == "higher":
-                            df['Position'] = (df[signal] > threshold).astype(int)
+                            df['Position'] = (df[signal].astype(float) > threshold).astype(int)
                         if condition == "lower":
-                            df['Position'] = (df[signal] < threshold).astype(int)
+                            df['Position'] = (df[signal].astype(float) < threshold).astype(int)
 
                     case "short":
                         if condition == "higher":
-                            df['Position'] = (df[signal] > threshold).astype(int) * -1
+                            df['Position'] = (df[signal].astype(float) > threshold).astype(int) * -1
                         if condition == "lower":
-                            df['Position'] = (df[signal] < threshold).astype(int) * -1
+                            df['Position'] = (df[signal].astype(float) < threshold).astype(int) * -1
                     case "both":
                         if condition == "higher":
-                            df['Position'] = ((df[signal] > threshold).astype(int)) + \
-                                            ((df[signal] < (1 - threshold)).astype(int) * -1)
+                            df['Position'] = ((df[signal].astype(float) > threshold).astype(int)) + \
+                                            ((df[signal].astype(float) < (1 - threshold)).astype(int) * -1)
                         if condition == "lower":
-                            df['Position'] = ((df[signal] < threshold).astype(int)) + \
-                                            ((df[signal] > (1 - threshold)).astype(int) * -1)
+                            df['Position'] = ((df[signal].astype(float) < threshold).astype(int)) + \
+                                            ((df[signal].astype(float) > (1 - threshold)).astype(int) * -1)
 
 
 
-        df['Profit'] = df['Position'].shift(1) * df['Changes']
+        df['Profit'] = df['Position'].shift(1) * df['Changes'] - abs(df['Position'].diff()).fillna(0) * self.commission
         df['Cumulative_Profit'] = df['Profit'].cumsum()
 
     def dump_data(self):
