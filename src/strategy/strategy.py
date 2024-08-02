@@ -10,7 +10,9 @@ class Strategy:
         self.source_df['Changes'] = self.source_df['Price'].pct_change(fill_method=None)
         self.source_df['Cumulative_Bnh'] = self.source_df['Changes'].cumsum()
         self.window_size = window_size
-        self.threshold = abs(threshold)
+        self.threshold = threshold
+        if long_short == "both":
+            self.threshold = abs(threshold)
         self.target = target
 
         self.annual_return = 0
@@ -75,7 +77,7 @@ class Strategy:
                             df['Position'] = (df[signal] > threshold).astype(int)
                         if condition == "lower":
                             # buy  when price is lower than moving average
-                            df['Position'] = (df[signal] < (threshold * - 1)).astype(int)
+                            df['Position'] = (df[signal] < threshold).astype(int)
 
                     case "short":
                         if condition == "higher":
@@ -83,7 +85,7 @@ class Strategy:
                             df['Position'] = (df[signal] > threshold).astype(int) * - 1
                         if condition == "lower":
                             # short when price is lower than moving average
-                            df['Position'] = (df[signal] < (threshold * - 1)).astype(int) * -1
+                            df['Position'] = (df[signal] < threshold).astype(int) * -1
 
                     case "both":
                         if condition == "higher":

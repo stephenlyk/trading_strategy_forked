@@ -41,7 +41,7 @@ class Optimization():
         results_data = []
         for result in results:
             result_data = result.dump_data()
-            result_data['Stratety Object'] = result
+            result_data['Strategy Object'] = result
 
             results_data.append(result_data)
 

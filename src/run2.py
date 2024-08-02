@@ -26,7 +26,7 @@ btc_price_df.columns = ['Date', 'Price']
 btc_price_df["Date"] = pd.to_datetime(btc_price_df["Date"])
 
 # Factor
-filename = 'some_value.csv'
+filename = '_v1_metrics_supply_loss_sum.csv'
 factor_df = pd.read_csv("../data/" + filename)[['Date', 'Value']]
 factor_df.columns = ['Date', 'Target']
 factor_df["Date"] = pd.to_datetime(factor_df["Date"])
@@ -67,6 +67,7 @@ if __name__ == "__main__":
     #roc_strategy = ROC(price_factor_df, 3000, 0.014, target='Target', long_short='long', condition='lower')
     #roc_strategy.plot_graph()
     test = running_single_strategy('ROC', price_factor_df, 'long', 'lower')
+    test.get_best().result_df.to_csv("roc_test_logic.csv")
     test.plot_heat_map()
     print('done')
     #print(result.calmar)

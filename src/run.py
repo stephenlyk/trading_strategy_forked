@@ -39,12 +39,6 @@ for filename in os.listdir(directory):
 
         price_factor_dict[filename] = price_factor_df
 
-#factor_df = pd.read_csv("../data/factors/" + filename)[['timestamp', 'value']]
-#factor_df.columns = ['Date', 'Target']
-#factor_df["Date"] = pd.to_datetime(factor_df["Date"])
-
-#price_factor_df = pd.merge(btc_price_df, factor_df, how='inner', on='Date')
-
 window_size_list = np.arange(2, 100, 5)
 threshold_params = {
         'ZScore': np.round(np.linspace(0, 3, 42), 3),
@@ -54,43 +48,52 @@ threshold_params = {
         'MinMax': np.round(np.linspace(0.1, 0.9, 42), 4),
         'Robust': np.round(np.linspace(0, 5, 32), 4),
         'Percentile': np.round(np.linspace(0.1, 0.9, 32), 4)
-}
+    }
+strategy_list = ['ZScore', 'MovingAverage', 'RSI', 'ROC', 'MinMax', 'Robust', 'Percentile']
 long_short_params = ['long', 'short', 'both']
 condition_params = ['lower', 'higher']
 
+running_list = []
+for filename in price_factor_dict:
+    for strategy in strategy_list:
+        for long_short in long_short_params:
+            for condition in condition_params:
+                test = {
+                        'Metric': filename,
+                        'Strategy': strategy,
+                        'Strategy Type': long_short,
+                        'Condition': condition
+                    }
+                running_list.append(test)
+
+
+
 overall_result = pd.DataFrame()
 
-strategy_list = ['ZScore', 'MovingAverage', 'RSI', 'ROC', 'MinMax', 'Robust', 'Percentile']
-def running_single_strategy(strategy, filename, price_factor_df, long_short, condition):
+def running_single_strategy(strategy, price_factor_df, long_short, condition):
 
     test = Optimization(strategy, price_factor_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
     test.run()
 
-    optimization_params = pd.DataFrame({
-        'Metric': filename,
-        'Strategy': strategy,
-        'Strategy Type': test.long_short,
-        'Condition': test.condition
-        }, index=[0])
 
-    test_output = pd.concat([optimization_params, test.get_best().reset_index(drop=True)], axis=1)
+    test_output = test.get_best()
     return test_output
-
-for key in price_factor_dict:
-    print(key)
-    price_factor_df = price_factor_dict[key]
-    for strategy in strategy_list:
-        for long_short in long_short_params:
-            for condition in condition_params:
-                output = running_single_strategy(strategy, key, price_factor_df, long_short, condition)
-                overall_result = pd.concat([overall_result, output], ignore_index=True)
-    overall_result.to_csv("btc_factors_test.csv")
-
-overall_result.to_csv("btc_factors_test.csv")
-print(overall_result)
 
 
 if __name__ == "__main__":
+
+    results_list = []
+
+    for run in running_list:
+        filename = run['Metric']
+        optimization_run = running_single_strategy(run['Strategy'], price_factor_dict[filename], run['Strategy Type'], run['Condition'])
+
+        results_list.append(run | optimization_run.dump_data())
+
+
+    results_list_df = pd.DataFrame(results_list)
+    results_list_df.to_csv("btc_factor_test2.csv")
+
 
     print('done')
     #print(result.calmar)
