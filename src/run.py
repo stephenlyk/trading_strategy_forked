@@ -29,12 +29,13 @@ pd.set_option('display.width', 1000)
 pd.set_option('mode.string_storage', 'pyarrow')
 
 # Paramenter
-COMMISSION = 0.0005
+BPS = 5 # commission
 GLASSNODE_API_KEY = os.getenv('GLASSNODE_API_KEY')
 ASSET = 'BTC'
 INTERVAL = '10m'
 WINDOW_SIZE_PERRCENT = 0.10
 NUM_WINDOW_SIZES = 40
+TRAIN_RATIO = 0.7
 
 # Glassnode fetching BTC price
 def fetch_asset_price(asset, interval, api_key):
@@ -50,7 +51,7 @@ def fetch_asset_price(asset, interval, api_key):
     if response.status_code == 200:
         data = response.json()
         df = pd.DataFrame(data)
-        #df = df.convert_dtypes(dtype_backend='pyarrow')
+        #df = df.convert_dtypes(dtype_backend='pyarrow') # might increase performance
         df.columns = ['Date', 'Price']
         df['Date'] = pd.to_datetime(df['Date'], unit='s')
         return df
@@ -63,6 +64,12 @@ btc_price_df.columns = ['Date', 'Price']
 btc_price_df["Date"] = pd.to_datetime(btc_price_df["Date"])
 
 # Factor
+def split_data(df, train_ratio=TRAIN_RATIO):
+    train_size = int(len(df) * train_ratio)
+    train_df = df.iloc[:train_size].copy()
+    test_df = df.iloc[train_size:].copy()
+    return train_df, test_df
+
 directory = '../data/factors'
 price_factor_dict = {}
 for filename in os.listdir(directory):
@@ -70,30 +77,41 @@ for filename in os.listdir(directory):
         file_path = os.path.join(directory, filename)
         #factor_df = pd.read_csv(file_path)[['timestamp', 'value']]
         factor_df = pd.read_csv(file_path)
-        #factor_df = factor_df.convert_dtypes(dtype_backend='pyarrow')
+        #factor_df = factor_df.convert_dtypes(dtype_backend='pyarrow')  # might increase performance
         factor_df.columns = ['Date', 'Target']
         factor_df["Date"] = pd.to_datetime(factor_df["Date"])
-        factor_df['Target'] = factor_df['Target'].shift(1) # shift data to avoid bias
+        factor_df['Target'] = factor_df['Target'].shift(5) # shift data to avoid bias
         price_factor_df = pd.merge(btc_price_df, factor_df, how='inner', on='Date')
 
         price_factor_dict[filename] = price_factor_df
 
 threshold_params = {
-        'ZScore': np.round(np.linspace(-3, 3, 42), 3),
-        'MovingAverage': np.round(np.linspace(-5, 5, 32), 3),
-        'RSI': np.round(np.linspace(0.2, 0.8, 32), 4),
-        'ROC': np.round(np.linspace(-1, 1, 32), 4),
-        'MinMax': np.round(np.linspace(0.1, 0.9, 42), 4),
-        'Robust': np.round(np.linspace(0, 5, 32), 4),
-        'Percentile': np.round(np.linspace(0.1, 0.9, 32), 4)
+        'ZScore': np.round(np.linspace(-3, 3, 20), 3),
+        'MovingAverage': np.round(np.linspace(-0.1, 0.1, 20), 3),
+        'RSI': np.round(np.linspace(0.2, 0.8, 10), 3),
+        'ROC': np.round(np.linspace(-0.1, 0.1, 20), 3),
+        'MinMax': np.round(np.linspace(0.1, 0.9, 20), 3),
+        'Robust': np.round(np.linspace(0.1, 0.9, 20), 3),
+        'Percentile': np.round(np.linspace(0.1, 0.9, 20), 3),
+        'Divergence': np.round(np.linspace(-3, 3, 20), 3)
     }
-strategy_list = ['ZScore', 'MovingAverage', 'RSI', 'ROC', 'MinMax', 'Robust', 'Percentile']
+strategy_classes = {
+        'ZScore': ZScore,
+        'MovingAverage': MovingAverage,
+        'RSI': RSI,
+        'ROC': ROC,
+        'MinMax': MinMax,
+        'Robust': Robust,
+        'Percentile': Percentile,
+        'Divergence': Divergence
+    }
 long_short_params = ['long', 'short', 'both']
+#long_short_params = ['both']
 condition_params = ['lower', 'higher']
 
 running_list = []
 for filename in price_factor_dict:
-    for strategy in strategy_list:
+    for strategy in strategy_classes:
         for long_short in long_short_params:
             for condition in condition_params:
                 test = {
@@ -110,36 +128,22 @@ overall_result = pd.DataFrame()
 
 def running_single_strategy(strategy, metric, price_factor_df, long_short, condition):
 
-    Strategy.bps = 7
+    Strategy.bps = BPS
+    train_df, test_df = split_data(price_factor_df)
     window_size_list = np.linspace(2, int(len(price_factor_df) * WINDOW_SIZE_PERRCENT),
                                    NUM_WINDOW_SIZES, dtype=int)
-
-    test = Optimization(strategy, price_factor_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
-    test.run()
-
-
-    test_output = {
-            'Metric': metric,
-            'Output': test.get_best()
-            }
-    return test_output
+    try:
+        strategy_object = Optimization(strategy_classes[strategy], train_df, test_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
+        strategy_object.run()
+        strategy_object.save_optimization_result("./results/" + metric + "/")
+    except:
+        print("Fail to run optimization: " + metric)
 
 
 if __name__ == "__main__":
 
-    results_list = []
     with tqdm_joblib(tqdm(leave=False, desc="Processing", total=len(running_list))) as progress_bar:
-        parallel_results =  Parallel(n_jobs=4, timeout=600)(delayed(running_single_strategy)(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])for run in running_list)
-
-    for result in parallel_results:
-        ouput = result['Output']
-
-        results_list.append({ "Metric": result['Metric'] } | ouput.dump_data())
-
-
-    results_list_df = pd.DataFrame(results_list)
-    results_list_df.to_csv("btc_factor_test2.csv")
-    print(results_list_df)
+        parallel_results =  Parallel(n_jobs=-1, backend='loky')(delayed(running_single_strategy)(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])for run in running_list)
 
     print('done')
     #print(result.calmar)
@@ -147,4 +151,3 @@ if __name__ == "__main__":
     #result.result_df.to_csv("btc_liq_test.csv")
     #print(result.result_df)
     #result.plot_graph()
-

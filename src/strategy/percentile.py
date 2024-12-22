@@ -1,5 +1,6 @@
 import numpy as np
-import pandas as pd
+#import pandas as pd
+import modin.pandas as pd
 import plotly.express as px
 from  strategy.moving_average import MovingAverage
 from strategy.strategy import Strategy

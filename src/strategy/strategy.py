@@ -1,6 +1,7 @@
 import numpy as np
-import pandas as pd
-import plotly.express as px
+#import pandas as pd
+import modin.pandas as pd
+import matplotlib.pyplot as plt
 
 class Strategy:
 
@@ -22,6 +23,7 @@ class Strategy:
         self.mdd = 0
         self.calmar = 0
         self.sharpe = 0
+        self.correlation = 0
 
     @staticmethod
     def annual_return(df, profit='Profit'):
@@ -123,6 +125,17 @@ class Strategy:
 
         df['Profit'] = df['Position'].shift(1) * df['Changes'] - abs(df['Position'].diff()).fillna(0) * self.commission
         df['Cumulative_Profit'] = df['Profit'].cumsum()
+        self.correlation = self._get_correlation(df)
+
+    def _get_correlation(self, df):
+        correlation = 100
+        df_cleaned = df.loc[:, ['Cumulative_Profit', 'Cumulative_Bnh']]
+        df_cleaned[['Cumulative_Profit', 'Cumulative_Bnh']] = df_cleaned[['Cumulative_Profit', 'Cumulative_Bnh']].replace([np.inf, -np.inf, 0], np.nan)
+
+        if len(df_cleaned) > 10:
+            correlation = df_cleaned['Cumulative_Profit'].corr(df_cleaned['Cumulative_Bnh'])
+        return correlation
+
 
     def dump_data(self):
         data = {
@@ -136,7 +149,21 @@ class Strategy:
 
         return data
 
+    def create_graph(self):
+        fig, ax = plt.subplots(figsize=(12, 8))
+    	# Plot both lines
+        self.result_df.plot(x='Date',
+                           y=['Cumulative_Profit', 'Cumulative_Bnh'],
+                           ax=ax)
+        # Set title
+        ax.set_title(f"{type(self).__name__} {self.window_size} {self.threshold}")
+        # Add grid
+        ax.grid(True)
+        # Adjust layout
+        plt.tight_layout()
+
+        return fig, ax
+
     def plot_graph(self):
-        fig = px.line(self.result_df, x='Date', y=['Cumulative_Profit', 'Cumulative_Bnh'], \
-                      title=type(self).__name__ + " " + str(self.window_size) + " " + str(self.threshold))
-        fig.show()
+        fig, _ = self.create_graph()
+        plt.show()
