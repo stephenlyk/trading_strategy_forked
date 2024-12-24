@@ -19,7 +19,8 @@ from matplotlib.patches import Rectangle
 
 class Optimization():
 
-    def __init__(self, strategy_class,  train_df, test_df, window_size_list, threshold_list, target, price='Price', long_short='long', condition='higher'):
+    def __init__(self, metric, strategy_class,  train_df, test_df, window_size_list, threshold_list, target, price='Price', long_short='long', condition='higher'):
+        self.metric = metric
         self.strategy_class = strategy_class
         self.train_df = train_df
         self.test_df = test_df
@@ -37,25 +38,32 @@ class Optimization():
         if long_short == "both":
             self.threshold_list = [x for x in self.threshold_list if x >= 0]
 
+
     def _run_strategy(self, window_size, threshold):
 
-        train_result = self.strategy_class(self.train_df, window_size, threshold, target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
-        test_result = self.strategy_class(self.test_df, window_size, threshold, target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
-        return train_result, test_result
+        train_result = self.strategy_class(self.metric, self.train_df, window_size, threshold, target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
+        test_result = self.strategy_class(self.metric, self.test_df, window_size, threshold, target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
+
+        train_result_data = train_result.dump_data()
+        test_result_data = test_result.dump_data()
+
+        return train_result_data, test_result_data
 
     def run(self):
-        results = Parallel(n_jobs=-1, backend='threading')(delayed(self._run_strategy)(window_size, threshold) for window_size in self.window_size_list for threshold in self.threshold_list)
-
+        results = []
         train_results_data = []
         test_results_data = []
-        for train_result, test_result in results:
-            train_result_data = train_result.dump_data()
-            train_result_data['Strategy Object'] = train_result
-            train_results_data.append(train_result_data)
+        results = Parallel(n_jobs=-1, backend='loky')(delayed(self._run_strategy)(window_size, threshold) for window_size in self.window_size_list for threshold in self.threshold_list)
 
-            test_result_data = test_result.dump_data()
-            test_result_data['Strategy Object'] = test_result
-            test_results_data.append(test_result_data)
+
+        #for window_size in self.window_size_list:
+        #    for threshold in self.threshold_list:
+        #        result = self._run_strategy(window_size, threshold)
+        #        results.append(result)
+
+        for train_result, test_result in results:
+            train_results_data.append(train_result)
+            test_results_data.append(test_result)
 
         self.train_results_data_df = pd.DataFrame(train_results_data)
         self.train_results_data_df = self.train_results_data_df.sort_values(by='Sharpe', ascending=False)
@@ -64,10 +72,17 @@ class Optimization():
         self.test_results_data_df = self.test_results_data_df.sort_values(by='Sharpe', ascending=False)
 
     def _create_optimization_result(self):
+        # get best train windows size and threshold
+        train_best_window_size = self.train_results_data_df.iloc[0]['Window']
+        train_best_threshold = self.train_results_data_df.iloc[0]['Threshold']
+        train_best_sharpe = self.train_results_data_df.iloc[0]['Sharpe']
+        test_best_sharpe = self.test_results_data_df.iloc[0]['Sharpe']
+
         train_result_data_pivot = self.train_results_data_df.pivot(index='Window', columns='Threshold', values='Sharpe')
         test_result_data_pivot = self.test_results_data_df.pivot(index='Window', columns='Threshold', values='Sharpe')
 
-        train_best, test_best = self.get_best()
+
+
 
         # create subpot
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(24, 8))
@@ -78,26 +93,25 @@ class Optimization():
 
         #### add red box
         # Find the positions of the specified value
-        train_pivot_positions = np.argwhere(np.isclose(train_result_data_pivot.values, train_best.sharpe, atol=1e-6))
-        test_pivot_positions = np.argwhere(np.isclose(test_result_data_pivot.values, test_best.sharpe, atol=1e-6))
+        train_pivot_positions = np.argwhere(np.isclose(train_result_data_pivot.values, train_best_sharpe, atol=1e-6))
+        test_pivot_positions = np.argwhere(np.isclose(test_result_data_pivot.values, test_best_sharpe, atol=1e-6))
 
         for row, col in train_pivot_positions:
             ax1.add_patch(Rectangle((col, row), 1, 1, fill=False, edgecolor='red', lw=2))
         for row, col in test_pivot_positions:
             ax2.add_patch(Rectangle((col, row), 1, 1, fill=False, edgecolor='red', lw=2))
 
-        # get best train windows size and threshold
-        train_best_window_size = train_best.window_size
-        train_best_threshold = train_best.threshold
-
         # plot the best strategy
+        train_best, _ = self.get_best()
         ax3.set_title(
-                f"Equity Curve - {self.strategy_class.__name__} (Window: {train_best_window_size}, Threshold: {train_best_threshold:.3f})")
+                f"Equity Curve - {self.strategy_class.__name__} (Window: {train_best.window_size}, Threshold: {train_best.threshold:.3f})")
         ax3.set_ylabel('Cumulative Profit')
         ax3.set_xlabel('Date')
         train_best.result_df.plot(x='Date', y=['Cumulative_Profit', 'Cumulative_Bnh'], color=['blue', 'green'], ax=ax3, label=['Train Strategy', 'Train Buy and Hold'])
-        test_result_df = self.test_results_data_df[(self.test_results_data_df['Window'] == train_best_window_size) & (self.test_results_data_df['Threshold'] == train_best_threshold)]
-        test_result = test_result_df.iloc[0]['Strategy Object']
+
+
+        test_result = self.strategy_class(self.metric, self.test_df, train_best.window_size, train_best.threshold, target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
+        test_result_df = test_result.result_df
         test_result.result_df.plot(x='Date', y=['Cumulative_Profit', 'Cumulative_Bnh'], color=['blue', 'green'], ax=ax3, label=['Test Strategy', 'Test Buy And Hold'], linestyle='--')
 
        # Add text box with key metrics
@@ -111,7 +125,7 @@ class Optimization():
                         f"Calmar: {test_result.calmar:.2f}")
 
         metrics_text = (f"{train_metrics}\n{test_metrics}\n"
-                        f"Best Window: {train_best_window_size}, Best Threshold: {train_best_threshold:.3f}")
+                        f"Best Window: {train_best.window_size}, Best Threshold: {train_best.threshold:.3f}")
         ax3.text(0.02, 0.98, metrics_text, transform=ax3.transAxes, verticalalignment='top',
                  fontsize=7, bbox=dict(facecolor='white', alpha=0.8))
         plt.tight_layout()
@@ -128,22 +142,29 @@ class Optimization():
         fig, _ = self._create_optimization_result()
         train_best, test_best = self.get_best()
 
-        # do not save if transition less than 100 positions
+        # do not save if position transition less than 100
         train_best_transitions = (train_best.result_df['Position'] != train_best.result_df['Position'].shift()).sum() - 1
         if train_best_transitions > 100:
 
             if train_best.sharpe > 1.5 or (self.long_short == 'short' and train_best.calmar > 0.5):
                 if train_best.correlation < 0.9:
+                    # Save graph
                     os.makedirs(directory, exist_ok=True)
-                    result_graph_name = f"{self.strategy_class.__name__}_{self.long_short}_{self.condition}"
-                    fig.savefig(directory + result_graph_name + ".png", dpi=300)
+                    result_strategy_name = f"{self.strategy_class.__name__}_{self.long_short}_{self.condition}"
+                    fig.savefig(directory + result_strategy_name + ".png", dpi=300)
+                    # Save csv
+                    train_best.result_df.to_csv(directory + result_strategy_name + ".csv")
+
         plt.close()
 
     def get_best(self):
 
-        train = self.train_results_data_df.iloc[0]['Strategy Object']
-        test =  self.test_results_data_df.iloc[0]['Strategy Object']
+        train_best_data = self.train_results_data_df.iloc[0]
+        train_best_object = self.strategy_class(self.metric, self.train_df, train_best_data['Window'], train_best_data['Threshold'], target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
 
-        return train, test
+        test_best_data =  self.test_results_data_df.iloc[0]
+        test_best_object = self.strategy_class(self.metric, self.test_df, test_best_data['Window'], test_best_data['Threshold'], target=self.target, price=self.price, long_short=self.long_short, condition=self.condition)
+
+        return train_best_object, test_best_object
 
 

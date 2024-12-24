@@ -7,7 +7,8 @@ class Strategy:
 
     bps = 10
 
-    def __init__(self, source_df, window_size, threshold, target='Price', price='Price', long_short="long", condition="higher"):
+    def __init__(self, metric, source_df, window_size, threshold, target='Price', price='Price', long_short="long", condition="higher"):
+        self.metric = metric
         self.commission = 0.0001 * Strategy.bps
         self.source_df = source_df
         self.source_df[target] = pd.to_numeric(self.source_df[target], errors='coerce')
@@ -32,11 +33,11 @@ class Strategy:
 
     @staticmethod
     def return_moving_average(df, col_name, window_size):
-        return df[col_name].rolling(window_size).mean()
+        return df[col_name].rolling(int(window_size)).mean()
 
     @staticmethod
     def return_moving_average_sd(df, col_name, window_size):
-        return df[col_name].rolling(window_size).std()
+        return df[col_name].rolling(int(window_size)).std()
 
     @staticmethod
     def get_sharpe(df, profit='Profit'):
@@ -63,6 +64,8 @@ class Strategy:
             multiplier = 365
         elif most_common_interval >= pd.Timedelta(hours=1):
             multiplier = 365 * 24
+        elif most_common_interval >= pd.Timedelta(minutes=10):
+            multiplier = 365 * 24 * 6
         elif most_common_interval >= pd.Timedelta(minutes=1):
             multiplier = 365 * 24 * 60
         elif most_common_interval >= pd.Timedelta(seconds=1):
@@ -128,12 +131,15 @@ class Strategy:
         self.correlation = self._get_correlation(df)
 
     def _get_correlation(self, df):
-        correlation = 100
+        correlation = 0
         df_cleaned = df.loc[:, ['Cumulative_Profit', 'Cumulative_Bnh']]
         df_cleaned[['Cumulative_Profit', 'Cumulative_Bnh']] = df_cleaned[['Cumulative_Profit', 'Cumulative_Bnh']].replace([np.inf, -np.inf, 0], np.nan)
 
         if len(df_cleaned) > 10:
-            correlation = df_cleaned['Cumulative_Profit'].corr(df_cleaned['Cumulative_Bnh'])
+            try:
+                correlation = df_cleaned['Cumulative_Profit'].corr(df_cleaned['Cumulative_Bnh'])
+            except:
+                print('Fail to get correlation: ' + metric)
         return correlation
 
 
@@ -144,7 +150,8 @@ class Strategy:
             'Sharpe': self.sharpe,
             'Annual_Return': self.annual_return,
             'MDD': self.mdd,
-            'Calmar': self.calmar
+            'Calmar': self.calmar,
+            'Correlation': self.correlation
         }
 
         return data

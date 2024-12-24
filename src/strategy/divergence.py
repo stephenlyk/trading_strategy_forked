@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class Divergence(Strategy):
 
-    def __init__(self, source_df, window_size, threshold, target='Price', price='Price', long_short="long",
+    def __init__(self, metric, source_df, window_size, threshold, target='Price', price='Price', long_short="long",
                  condition="higher"):
         logger.debug(
             f"Initializing Divergence strategy with window_size={window_size}, threshold={threshold}, target={target}, price={price}, long_short={long_short}, condition={condition}")
@@ -17,7 +17,7 @@ class Divergence(Strategy):
         logger.debug(f"Source DataFrame columns: {source_df.columns}")
         logger.debug(f"First few rows of source DataFrame:\n{source_df.head()}")
 
-        super().__init__(source_df, window_size, threshold, target=target, price=price, long_short=long_short,
+        super().__init__(metric, source_df,window_size, threshold, target=target, price=price, long_short=long_short,
                          condition=condition)
         self.result_df = self._divergence_strategy(source_df.copy(), window_size, threshold, target, price, long_short,
                                                    condition)

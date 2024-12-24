@@ -7,8 +7,8 @@ from strategy.strategy import Strategy
 
 class Robust(Strategy):
 
-    def __init__(self, source_df, window_size, threshold, target='Price', price='Price', long_short="long", condition="higher"):
-        super().__init__(source_df, window_size, threshold, target=target, price=price, long_short=long_short, condition=condition)
+    def __init__(self, metric, source_df, window_size, threshold, target='Price', price='Price', long_short="long", condition="higher"):
+        super().__init__(metric, source_df, window_size, threshold, target=target, price=price, long_short=long_short, condition=condition)
         self.result_df = self._robust_strategy(source_df.copy(), window_size, threshold, target, long_short, condition)
         self.annual_return = Strategy.annual_return(self.result_df)
         self.mdds = Strategy.return_mdds(self.result_df['Cumulative_Profit'])

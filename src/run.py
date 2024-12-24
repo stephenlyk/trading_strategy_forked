@@ -15,6 +15,7 @@ from strategy.roc import ROC
 from strategy.percentile import Percentile
 from strategy.min_max import MinMax
 from strategy.robust import Robust
+from strategy.divergence import Divergence
 from joblib import Parallel, delayed
 from optimization import Optimization
 from dotenv import load_dotenv
@@ -86,12 +87,12 @@ for filename in os.listdir(directory):
         price_factor_dict[filename] = price_factor_df
 
 threshold_params = {
-        'ZScore': np.round(np.linspace(-3, 3, 20), 3),
-        'MovingAverage': np.round(np.linspace(-0.1, 0.1, 20), 3),
-        'RSI': np.round(np.linspace(0.2, 0.8, 10), 3),
+        'ZScore': np.round(np.linspace(-4, 4, 20), 3),
+        'MovingAverage': np.round(np.linspace(-3, 3, 20), 3),
+        'RSI': np.round(np.linspace(0.2, 0.8, 20), 3),
         'ROC': np.round(np.linspace(-0.1, 0.1, 20), 3),
         'MinMax': np.round(np.linspace(0.1, 0.9, 20), 3),
-        'Robust': np.round(np.linspace(0.1, 0.9, 20), 3),
+        'Robust': np.round(np.linspace(-3, 3, 20), 3),
         'Percentile': np.round(np.linspace(0.1, 0.9, 20), 3),
         'Divergence': np.round(np.linspace(-3, 3, 20), 3)
     }
@@ -128,22 +129,26 @@ overall_result = pd.DataFrame()
 
 def running_single_strategy(strategy, metric, price_factor_df, long_short, condition):
 
+
     Strategy.bps = BPS
     train_df, test_df = split_data(price_factor_df)
     window_size_list = np.linspace(2, int(len(price_factor_df) * WINDOW_SIZE_PERRCENT),
                                    NUM_WINDOW_SIZES, dtype=int)
-    try:
-        strategy_object = Optimization(strategy_classes[strategy], train_df, test_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
-        strategy_object.run()
-        strategy_object.save_optimization_result("./results/" + metric + "/")
-    except:
-        print("Fail to run optimization: " + metric)
+    #try:
+    strategy_object = Optimization(metric, strategy_classes[strategy], train_df, test_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
+    strategy_object.run()
+    strategy_object.save_optimization_result("./results/" + metric + "/")
+    #except:
+    #    print("Fail to run optimization: " + metric)
 
 
 if __name__ == "__main__":
 
     with tqdm_joblib(tqdm(leave=False, desc="Processing", total=len(running_list))) as progress_bar:
         parallel_results =  Parallel(n_jobs=-1, backend='loky')(delayed(running_single_strategy)(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])for run in running_list)
+
+    #for run in tqdm(running_list, desc="Processing Tasks"):
+    #    running_single_strategy(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])
 
     print('done')
     #print(result.calmar)
