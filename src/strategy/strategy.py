@@ -66,6 +66,8 @@ class Strategy:
             multiplier = 365 * 24
         elif most_common_interval >= pd.Timedelta(minutes=10):
             multiplier = 365 * 24 * 6
+        elif most_common_interval >= pd.Timedelta(minutes=2.5):
+            multiplier = 365 * 24 * 24
         elif most_common_interval >= pd.Timedelta(minutes=1):
             multiplier = 365 * 24 * 60
         elif most_common_interval >= pd.Timedelta(seconds=1):
