@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/.env python
 import os
 import numpy as np
 import pandas as pd
@@ -16,6 +16,9 @@ from strategy.percentile import Percentile
 from strategy.min_max import MinMax
 from strategy.robust import Robust
 from strategy.divergence import Divergence
+# import two new strategies
+from strategy.decimal_scaling import DecimalScaling
+from strategy.log_transform import LogTransform
 from joblib import Parallel, delayed
 from optimization import Optimization
 from dotenv import load_dotenv
@@ -29,14 +32,16 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 pd.set_option('mode.string_storage', 'pyarrow')
 
-# Paramenter
+# Parameter
 BPS = 5 # commission
 GLASSNODE_API_KEY = os.getenv('GLASSNODE_API_KEY')
 ASSET = 'BTC'
-INTERVAL = '10m'
-WINDOW_SIZE_PERRCENT = 0.10
+INTERVAL = '1h'
+SHIFT = 2
+WINDOW_SIZE_PERCENT = 0.10
 NUM_WINDOW_SIZES = 40
 TRAIN_RATIO = 0.7
+INPUT_FOLDER = '/Users/stephenlyk/Desktop/Gnproject/src/fetch_data/Crosscheck copy'
 
 # Glassnode fetching BTC price
 def fetch_asset_price(asset, interval, api_key):
@@ -71,7 +76,7 @@ def split_data(df, train_ratio=TRAIN_RATIO):
     test_df = df.iloc[train_size:].copy()
     return train_df, test_df
 
-directory = '../data/factors'
+directory = INPUT_FOLDER
 price_factor_dict = {}
 for filename in os.listdir(directory):
     if filename.endswith('.csv'):
@@ -81,7 +86,7 @@ for filename in os.listdir(directory):
         #factor_df = factor_df.convert_dtypes(dtype_backend='pyarrow')  # might increase performance
         factor_df.columns = ['Date', 'Target']
         factor_df["Date"] = pd.to_datetime(factor_df["Date"])
-        factor_df['Target'] = factor_df['Target'].shift(5) # shift data to avoid bias
+        factor_df['Target'] = factor_df['Target'].shift(SHIFT) # shift data to avoid bias
         price_factor_df = pd.merge(btc_price_df, factor_df, how='inner', on='Date')
 
         price_factor_dict[filename] = price_factor_df
@@ -94,8 +99,10 @@ threshold_params = {
         'MinMax': np.round(np.linspace(0.1, 0.9, 20), 3),
         'Robust': np.round(np.linspace(-3, 3, 20), 3),
         'Percentile': np.round(np.linspace(0.1, 0.9, 20), 3),
-        'Divergence': np.round(np.linspace(-3, 3, 20), 3)
-    }
+        'Divergence': np.round(np.linspace(-3, 3, 20), 3),
+        'DecimalScaling': np.round(np.linspace(0.1, 1.0, 20), 3),  # new strat param
+        'LogTransform': np.round(np.linspace(-3, 3, 20), 3)  # new strat param
+        }
 strategy_classes = {
         'ZScore': ZScore,
         'MovingAverage': MovingAverage,
@@ -104,7 +111,9 @@ strategy_classes = {
         'MinMax': MinMax,
         'Robust': Robust,
         'Percentile': Percentile,
-        'Divergence': Divergence
+        'Divergence': Divergence,
+        'DecimalScaling': DecimalScaling,
+        'LogTransform': LogTransform
     }
 long_short_params = ['long', 'short', 'both']
 #long_short_params = ['both']
@@ -132,7 +141,7 @@ def running_single_strategy(strategy, metric, price_factor_df, long_short, condi
 
     Strategy.bps = BPS
     train_df, test_df = split_data(price_factor_df)
-    window_size_list = np.linspace(2, int(len(price_factor_df) * WINDOW_SIZE_PERRCENT),
+    window_size_list = np.linspace(2, int(len(price_factor_df) * WINDOW_SIZE_PERCENT),
                                    NUM_WINDOW_SIZES, dtype=int)
     try:
         strategy_object = Optimization(metric, strategy_classes[strategy], train_df, test_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
