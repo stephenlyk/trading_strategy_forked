@@ -134,14 +134,14 @@ class Strategy:
 
     def _get_correlation(self, df):
         correlation = 0
-        df_cleaned = df.loc[:, ['Cumulative_Profit', 'Cumulative_Bnh']]
-        df_cleaned[['Cumulative_Profit', 'Cumulative_Bnh']] = df_cleaned[['Cumulative_Profit', 'Cumulative_Bnh']].replace([np.inf, -np.inf, 0], np.nan)
+        df_cleaned = df.loc[:, ['Profit', 'Changes']]
+        df_cleaned[['Profit', 'Changes']] = df_cleaned[['Profit', 'Changes']].replace([np.inf, -np.inf, 0], np.nan)
 
         if len(df_cleaned) > 10:
             try:
-                correlation = df_cleaned['Cumulative_Profit'].corr(df_cleaned['Cumulative_Bnh'])
+                correlation = df_cleaned['Profit'].corr(df_cleaned['Changes'])
             except:
-                print('Fail to get correlation: ' + metric)
+                print('Fail to get correlation: ' + self.metric)
         return correlation
 
 

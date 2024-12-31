@@ -137,29 +137,27 @@ for filename in price_factor_dict:
 overall_result = pd.DataFrame()
 
 def running_single_strategy(strategy, metric, price_factor_df, long_short, condition):
-
-
     Strategy.bps = BPS
     train_df, test_df = split_data(price_factor_df)
     window_size_list = np.linspace(2, int(len(price_factor_df) * WINDOW_SIZE_PERCENT),
                                    NUM_WINDOW_SIZES, dtype=int)
     try:
         strategy_object = Optimization(metric, strategy_classes[strategy], train_df, test_df, window_size_list, threshold_params[strategy], target="Target", price='Price', long_short=long_short, condition=condition)
-        strategy_object.run()
-        strategy_object.save_optimization_result("./results/" + metric + "/")
+        return strategy_object.get_and_save_summary("./results/")
     except:
         print("Fail to run optimization: " + metric)
 
 
 if __name__ == "__main__":
-
     with tqdm_joblib(tqdm(leave=False, desc="Processing", total=len(running_list))) as progress_bar:
-        parallel_results =  Parallel(n_jobs=-1, backend='loky')(delayed(running_single_strategy)(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])for run in running_list)
+        parallel_results = Parallel(n_jobs=-1, backend='loky')(delayed(running_single_strategy)(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])for run in running_list)
 
-    #for run in tqdm(running_list, desc="Processing Tasks"):
-    #    running_single_strategy(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])
+    # Save summary
+    summary_df = pd.DataFrame(parallel_results)
+    summary_df.to_csv("./results/strategy_summary.csv", index=False)
 
     print('done')
+
     #print(result.calmar)
     #print(result.sharpe)
     #result.result_df.to_csv("btc_liq_test.csv")

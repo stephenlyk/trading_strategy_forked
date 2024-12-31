@@ -164,4 +164,63 @@ class Optimization():
 
         return train_best_object, test_best_object
 
+    # add summary csv function
+    def get_and_save_summary(self, save_dir="./results/"):
+        """
+        Runs optimization, saves results and summary
+        Returns dictionary containing summary statistics
+        """
+        try:
+            self.run()
+            self.save_optimization_result(save_dir + self.metric + "/")
 
+            train_best, _ = self.get_best()
+            # Create test result using train's best parameters
+            test_result = self.strategy_class(self.metric, self.test_df, train_best.window_size, train_best.threshold,
+                                              target=self.target, price=self.price, long_short=self.long_short,
+                                              condition=self.condition)
+
+            train_best_transitions = (train_best.result_df['Position'] != train_best.result_df[
+                'Position'].shift()).sum() - 1
+
+            summary_data = {
+                'Metric': self.metric,
+                'Strategy': self.strategy_class.__name__,
+                'Long_Short': self.long_short,
+                'Condition': self.condition,
+                'Best_Window': train_best.window_size,
+                'Best_Threshold': train_best.threshold,
+                'Train_Sharpe': train_best.sharpe,
+                'Test_Sharpe': test_result.sharpe,  # Using test results with train's best parameters
+                'Train_Annual_Return': train_best.annual_return,
+                'Test_Annual_Return': test_result.annual_return,
+                'Train_MDD': train_best.mdd,
+                'Test_MDD': test_result.mdd,
+                'Train_Calmar': train_best.calmar,
+                'Test_Calmar': test_result.calmar,
+                'Correlation': train_best.correlation,
+                'Position_Transitions': train_best_transitions
+            }
+
+            return summary_data
+
+        except Exception as e:
+            print(f"Failed to run optimization: {self.metric}")
+            return {
+                'Metric': self.metric,
+                'Strategy': self.strategy_class.__name__,
+                'Long_Short': self.long_short,
+                'Condition': self.condition,
+                'Best_Window': None,
+                'Best_Threshold': None,
+                'Train_Sharpe': None,
+                'Test_Sharpe': None,
+                'Train_Annual_Return': None,
+                'Test_Annual_Return': None,
+                'Train_MDD': None,
+                'Test_MDD': None,
+                'Train_Calmar': None,
+                'Test_Calmar': None,
+                'Correlation': None,
+                'Position_Transitions': None
+            }
