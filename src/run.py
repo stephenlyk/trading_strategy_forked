@@ -36,12 +36,12 @@ pd.set_option('mode.string_storage', 'pyarrow')
 BPS = 5 # commission
 GLASSNODE_API_KEY = os.getenv('GLASSNODE_API_KEY')
 ASSET = 'BTC'
-INTERVAL = '1h'
-SHIFT = 2
+INTERVAL = '24h'
+SHIFT = 1
 WINDOW_SIZE_PERCENT = 0.10
 NUM_WINDOW_SIZES = 40
 TRAIN_RATIO = 0.7
-INPUT_FOLDER = '/Users/stephenlyk/Desktop/Gnproject/src/fetch_data/Crosscheck copy'
+INPUT_FOLDER = '/Users/stephenlyk/Desktop/Gnproject/src/fetch_data/BTC/24h/test'
 
 # Glassnode fetching BTC price
 def fetch_asset_price(asset, interval, api_key):
@@ -151,6 +151,10 @@ def running_single_strategy(strategy, metric, price_factor_df, long_short, condi
 if __name__ == "__main__":
     with tqdm_joblib(tqdm(leave=False, desc="Processing", total=len(running_list))) as progress_bar:
         parallel_results = Parallel(n_jobs=-1, backend='loky')(delayed(running_single_strategy)(run['Strategy'], run['Metric'], price_factor_dict[run['Metric']], run['Strategy Type'], run['Condition'])for run in running_list)
+
+    # Create results directory if it doesn't exist
+    if not os.path.exists("./results"):
+        os.makedirs("./results")
 
     # Save summary
     summary_df = pd.DataFrame(parallel_results)

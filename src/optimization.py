@@ -141,7 +141,7 @@ class Optimization():
 
         # do not save if position transition less than 100
         train_best_transitions = (train_best.result_df['Position'] != train_best.result_df['Position'].shift()).sum() - 1
-        if train_best_transitions > 100:
+        if train_best_transitions > 10:
 
             if train_best.sharpe > 1.5 or (self.long_short == 'short' and train_best.calmar > 0.5):
                 if train_best.correlation < 0.9:

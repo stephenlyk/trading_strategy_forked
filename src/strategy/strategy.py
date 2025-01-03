@@ -135,11 +135,15 @@ class Strategy:
     def _get_correlation(self, df):
         correlation = 0
         df_cleaned = df.loc[:, ['Profit', 'Changes']]
-        df_cleaned[['Profit', 'Changes']] = df_cleaned[['Profit', 'Changes']].replace([np.inf, -np.inf, 0], np.nan)
+
+        # Only replace infinities with NaN, keep zeros
+        df_cleaned[['Profit', 'Changes']] = df_cleaned[['Profit', 'Changes']].replace([np.inf, -np.inf], np.nan)
 
         if len(df_cleaned) > 10:
             try:
-                correlation = df_cleaned['Profit'].corr(df_cleaned['Changes'])
+                # Check if we have non-constant data with valid standard deviations
+                if (df_cleaned['Profit'].std() > 0) and (df_cleaned['Changes'].std() > 0):
+                    correlation = df_cleaned['Profit'].corr(df_cleaned['Changes'])
             except:
                 print('Fail to get correlation: ' + self.metric)
         return correlation
